@@ -10,7 +10,7 @@ This repository serves as a master portfolio of enterprise-level, production-rea
 
 Every pipeline, agent, and engine incubated in this repository adheres to high-end software development paradigms:
 * **Sub-Second Real-Time Latency:** Eliminating heavy framework overheads by implementing clean, native asynchronous workflows (`asyncio`, concurrent routing loops).
-* **Strict Structural Type-Safety:** Total enforcement of runtime validation schemas leveraging Pydantic V2 and OpenAI Structured Outputs.
+* **Strict Structural Type-Safety:** Total enforcement of runtime validation schemas leveraging Pydantic V2 and Gemini structured JSON outputs.
 * **Corporate Metric-Driven Design:** Every module built is engineered to solve a high-stakes business pain point, directly scaling conversion rates or radically minimizing operational overhead.
 * **Deterministic Telemetry & Observability:** Production-ready colorized logging systems mapping absolute operational states and background data extractions.
 

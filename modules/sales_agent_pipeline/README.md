@@ -15,3 +15,15 @@ The ecosystem deploys a native, non-blocking cascading agent network utilizing r
 ### 1. Provision Dependencies
 ```bash
 pip install -r requirements.txt
+```
+
+### 2. Configure Gemini
+Add your key to the repository root `.env`:
+```env
+GEMINI_API_KEY="your-gemini-api-key"
+```
+
+### 3. Run Live CLI
+```bash
+python -m modules.sales_agent_pipeline.demo_cli
+```
