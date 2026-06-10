@@ -1,0 +1,17 @@
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+
+# Python
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Node
+node_modules/
+dashboard/.next/
+dashboard/out/
+*.tsbuildinfo
+next-env.d.ts
