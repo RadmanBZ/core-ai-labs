@@ -1,8 +1,11 @@
 import os
-from dotenv import load_application_env
+from pathlib import Path
 
-# Automatically search and look up the root .env file variables
-load_application_env()
+from dotenv import load_dotenv
+
+# Load the repository root .env regardless of current working directory
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+load_dotenv(_REPO_ROOT / ".env")
 
 class PipelineConfig:
     """Central configuration for Core AI Labs Sales Agent Engine."""
