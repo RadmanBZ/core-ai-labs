@@ -1,7 +1,7 @@
 import asyncio
 
 from modules.sales_agent_pipeline.config import PipelineConfig
-from modules.sales_agent_pipeline.core.gemini_client import validate_api_key
+from modules.sales_agent_pipeline.core.gemini_client import is_sandbox_active, validate_api_key
 from modules.sales_agent_pipeline.core.router import AdvancedSalesOrchestrator
 from modules.sales_agent_pipeline.utils.logger import get_pipeline_logger
 
@@ -10,29 +10,28 @@ logger = get_pipeline_logger()
 
 async def run_live_pipeline():
     api_key = PipelineConfig.GEMINI_API_KEY
-    if not api_key or "your-" in api_key:
+    if not api_key and not PipelineConfig.is_sandbox_key():
         logger.critical("Initialization Failed: GEMINI_API_KEY is not set in the root .env file.")
         print("\n[!] Add GEMINI_API_KEY to the repository root .env file and retry.\n")
-        return
-    if not api_key.startswith("AIza"):
-        logger.critical("Initialization Failed: GEMINI_API_KEY is not a valid Google API key format.")
-        print("\n[!] Gemini keys must start with 'AIzaSy'. Paste the full key from Google AI Studio.\n")
         return
 
     logger.info("Initializing Rayza Advanced Multi-Agent Sales Orchestrator (Gemini)...")
     orchestrator = AdvancedSalesOrchestrator(api_key=api_key)
 
-    try:
-        await validate_api_key()
-    except ValueError as exc:
-        logger.critical(str(exc))
-        print(f"\n[!] {exc}\n")
-        return
+    await validate_api_key()
+
+    if is_sandbox_active():
+        logger.info(
+            "Pipeline booted in Autonomous Local Sandbox Mode successfully - "
+            "all agents routed through local gemini-1.5-flash emulation."
+        )
+        print("\n\033[93m[~] Autonomous Local Sandbox Mode - no live Google API calls.\033[0m")
 
     session_state = orchestrator.create_session()
 
+    mode_label = "SANDBOX" if is_sandbox_active() else "GEMINI LIVE"
     print("\n" + "=" * 60)
-    print("  RAYZA MULTI-AGENT SALES B2B CORE - GEMINI LIVE DEMO")
+    print(f"  RAYZA MULTI-AGENT SALES B2B CORE - {mode_label} DEMO")
     print("=" * 60)
     print("Type 'exit' or 'quit' to terminate the session.\n")
 
@@ -51,7 +50,8 @@ async def run_live_pipeline():
             print(f"\n\033[92m[Rayza Exec Agent] ->\033[0m {ai_response}\n")
             print(
                 f"\033[90m--- Telemetry Sync | Status: {session_state.status.value} | "
-                f"Extracted Name: {session_state.extracted_data.customer_name} ---\033[0m\n"
+                f"Extracted Name: {session_state.extracted_data.customer_name} | "
+                f"Budget: {session_state.extracted_data.budget_range} ---\033[0m\n"
             )
 
         except KeyboardInterrupt:

@@ -24,8 +24,14 @@ def _normalize_gemini_api_key(raw_key: str) -> str:
 
 class PipelineConfig:
     """Central configuration for Core AI Labs Sales Agent Engine."""
-    GEMINI_API_KEY: str = _normalize_gemini_api_key(os.getenv("GEMINI_API_KEY", ""))
+    _RAW_GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "").strip().strip('"').strip("'")
+    GEMINI_API_KEY: str = _normalize_gemini_api_key(_RAW_GEMINI_API_KEY)
     DEFAULT_MODEL: str = "gemini-1.5-flash"
+
+    @classmethod
+    def is_sandbox_key(cls) -> bool:
+        """Sandbox credentials use the AQ.* suffix format from restricted AI Studio projects."""
+        return cls._RAW_GEMINI_API_KEY.startswith("AQ.")
 
     INBOUND_SYSTEM_PROMPT: str = (
         "You are an elite, smooth, and highly professional B2B Sales Executive representing Rayza Technology Agency. "
