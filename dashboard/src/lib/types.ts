@@ -80,6 +80,15 @@ export interface StreamEvent {
   payload: unknown;
 }
 
+export interface TelemetryBridgePayload {
+  session: PipelineState;
+  agentPhase: AgentPhase;
+  isStreaming: boolean;
+  telemetry: SystemTelemetry;
+  ledger: LedgerEntry[];
+  updated_at: string;
+}
+
 export const EMPTY_EXTRACTED: ExtractedLeadInfo = {
   customer_name: null,
   company_name: null,

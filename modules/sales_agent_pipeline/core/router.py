@@ -6,6 +6,7 @@ from modules.sales_agent_pipeline.core.inbound_agent import InboundAgent
 from modules.sales_agent_pipeline.core.scorer_agent import ScorerAgent
 from modules.sales_agent_pipeline.models import PipelineState
 from modules.sales_agent_pipeline.utils.logger import get_pipeline_logger
+from modules.sales_agent_pipeline.utils.telemetry_bridge import push_telemetry
 
 logger = get_pipeline_logger()
 
@@ -54,4 +55,5 @@ class AdvancedSalesOrchestrator:
             f"[Session {state.session_id}] Telemetry Status: {state.status.value} | "
             f"Budget Fit Score: {state.evaluation.budget_fit if state.evaluation else 0}/10"
         )
+        await push_telemetry(state)
         return reply

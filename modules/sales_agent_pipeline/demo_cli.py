@@ -33,7 +33,8 @@ async def run_live_pipeline():
     print("\n" + "=" * 60)
     print(f"  RAYZA MULTI-AGENT SALES B2B CORE - {mode_label} DEMO")
     print("=" * 60)
-    print("Type 'exit' or 'quit' to terminate the session.\n")
+    print("Type 'exit' or 'quit' to terminate the session.")
+    print("Dashboard sync: telemetry pushes to shared_state.json + http://localhost:3000/api/telemetry\n")
 
     while True:
         try:

@@ -9,6 +9,9 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 
+# Shared telemetry bridge
+shared_state.json
+
 # Node
 node_modules/
 dashboard/.next/

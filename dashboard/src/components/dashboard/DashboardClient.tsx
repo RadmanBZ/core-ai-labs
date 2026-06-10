@@ -21,6 +21,7 @@ export function DashboardClient() {
     ledger,
     agentPhase,
     isStreaming,
+    isLiveConnected,
     parsingFields,
     resetSession,
     startSimulation,
@@ -55,8 +56,14 @@ export function DashboardClient() {
             </p>
           </div>
           <div className="hidden items-center gap-3 md:flex">
-            <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-400">
-              All Nodes Online
+            <span
+              className={
+                isLiveConnected
+                  ? "rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-cyan-400"
+                  : "rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-400"
+              }
+            >
+              {isLiveConnected ? "Live CLI Bridge Active" : "Mock Telemetry Mode"}
             </span>
             <span className="font-mono text-xs text-slate-500">
               {new Date().toLocaleTimeString("en-US", { hour12: false })}

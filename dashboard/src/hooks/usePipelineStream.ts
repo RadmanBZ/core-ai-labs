@@ -18,7 +18,10 @@ import {
   LedgerEntry,
   PipelineState,
   SystemTelemetry,
+  TelemetryBridgePayload,
 } from "@/lib/types";
+
+const POLL_INTERVAL_MS = 1500;
 
 export function usePipelineStream() {
   const [activeView, setActiveView] = useState<DashboardView>("telemetry");
@@ -29,18 +32,62 @@ export function usePipelineStream() {
   const [ledger, setLedger] = useState<LedgerEntry[]>(createInitialLedger);
   const [agentPhase, setAgentPhase] = useState<AgentPhase>("idle");
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isLiveConnected, setIsLiveConnected] = useState(false);
   const [parsingFields, setParsingFields] = useState<Set<keyof ExtractedLeadInfo>>(
     new Set()
   );
 
   const simulatorRef = useRef<PipelineStreamSimulator | null>(null);
+  const lastSyncRef = useRef<string>("");
 
   useEffect(() => {
     simulatorRef.current = new PipelineStreamSimulator();
     return () => simulatorRef.current?.stop();
   }, []);
 
+  const applyBridgePayload = useCallback((payload: TelemetryBridgePayload) => {
+    if (payload.updated_at === lastSyncRef.current) {
+      return;
+    }
+    lastSyncRef.current = payload.updated_at;
+    setSession(payload.session);
+    setTelemetry(payload.telemetry);
+    setLedger(payload.ledger);
+    setAgentPhase(payload.agentPhase);
+    setIsStreaming(payload.isStreaming);
+    setParsingFields(new Set());
+    setIsLiveConnected(true);
+  }, []);
+
   useEffect(() => {
+    let cancelled = false;
+
+    const pollTelemetry = async () => {
+      try {
+        const response = await fetch("/api/telemetry", { cache: "no-store" });
+        if (!response.ok) return;
+        const payload = (await response.json()) as TelemetryBridgePayload;
+        if (!cancelled) {
+          applyBridgePayload(payload);
+        }
+      } catch {
+        if (!cancelled) {
+          setIsLiveConnected(false);
+        }
+      }
+    };
+
+    pollTelemetry();
+    const interval = setInterval(pollTelemetry, POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [applyBridgePayload]);
+
+  useEffect(() => {
+    if (isLiveConnected) return;
+
     const interval = setInterval(() => {
       setTelemetry((prev) => {
         const metric: LatencyMetric = {
@@ -60,7 +107,7 @@ export function usePipelineStream() {
       });
     }, 4000);
     return () => clearInterval(interval);
-  }, []);
+  }, [isLiveConnected]);
 
   const resetSession = useCallback(() => {
     simulatorRef.current?.stop();
@@ -69,6 +116,7 @@ export function usePipelineStream() {
     setAgentPhase("idle");
     setParsingFields(new Set());
     setIsStreaming(false);
+    lastSyncRef.current = "";
   }, []);
 
   const startSimulation = useCallback(async () => {
@@ -164,8 +212,9 @@ export function usePipelineStream() {
     ledger,
     agentPhase,
     isStreaming,
+    isLiveConnected,
     parsingFields,
     resetSession,
     startSimulation,
   };
-}
+};
