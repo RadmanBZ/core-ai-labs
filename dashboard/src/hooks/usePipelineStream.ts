@@ -6,6 +6,7 @@ import {
   createInitialLedger,
   createInitialTelemetry,
   generateSessionId,
+  IDLE_SESSION_ID,
   PipelineStreamSimulator,
 } from "@/lib/mock-stream";
 import {
@@ -26,7 +27,7 @@ const POLL_INTERVAL_MS = 1500;
 export function usePipelineStream() {
   const [activeView, setActiveView] = useState<DashboardView>("telemetry");
   const [session, setSession] = useState<PipelineState>(() =>
-    createEmptySession(generateSessionId())
+    createEmptySession(IDLE_SESSION_ID)
   );
   const [telemetry, setTelemetry] = useState<SystemTelemetry>(createInitialTelemetry);
   const [ledger, setLedger] = useState<LedgerEntry[]>(createInitialLedger);

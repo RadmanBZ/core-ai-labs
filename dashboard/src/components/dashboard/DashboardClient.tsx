@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { LeadScoringGauge } from "@/components/analytics/LeadScoringGauge";
 import { LatencyTokenChart } from "@/components/analytics/LatencyTokenChart";
 import { PipelineFunnelChart } from "@/components/analytics/PipelineFunnelChart";
@@ -28,6 +29,15 @@ export function DashboardClient() {
   } = usePipelineStream();
 
   const score = compositeScore(session.evaluation);
+  const [clock, setClock] = useState("");
+
+  useEffect(() => {
+    const tick = () =>
+      setClock(new Date().toLocaleTimeString("en-US", { hour12: false }));
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#050A12] text-slate-100">
@@ -65,8 +75,8 @@ export function DashboardClient() {
             >
               {isLiveConnected ? "Live CLI Bridge Active" : "Mock Telemetry Mode"}
             </span>
-            <span className="font-mono text-xs text-slate-500">
-              {new Date().toLocaleTimeString("en-US", { hour12: false })}
+            <span className="font-mono text-xs text-slate-500" suppressHydrationWarning>
+              {clock || "--:--:--"}
             </span>
           </div>
         </header>

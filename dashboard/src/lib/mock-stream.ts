@@ -112,6 +112,10 @@ function randomTokens(): number {
   return Math.floor(180 + Math.random() * 220);
 }
 
+export const IDLE_SESSION_ID = "idle";
+
+const DETERMINISTIC_EPOCH_MS = 1_700_000_000_000;
+
 export function createInitialTelemetry(): SystemTelemetry {
   return {
     nodeHealth: {
@@ -123,9 +127,9 @@ export function createInitialTelemetry(): SystemTelemetry {
     pipelineLatencyMs: 742,
     activeSessions: 3,
     latencyHistory: Array.from({ length: 24 }, (_, i) => ({
-      timestamp: Date.now() - (23 - i) * 4000,
-      latencyMs: 520 + Math.sin(i / 3) * 120 + Math.random() * 80,
-      tokens: 200 + Math.cos(i / 4) * 40 + Math.random() * 30,
+      timestamp: DETERMINISTIC_EPOCH_MS - (23 - i) * 4000,
+      latencyMs: Math.round(520 + Math.sin(i / 3) * 120 + (i % 5) * 12),
+      tokens: Math.round(200 + Math.cos(i / 4) * 40 + (i % 4) * 8),
     })),
     funnelDistribution: {
       [LeadStatus.QUALIFIED]: 12,
@@ -145,7 +149,7 @@ export function createInitialLedger(): LedgerEntry[] {
       budget_range: "OMR 15,000",
       status: LeadStatus.QUALIFIED,
       composite_score: 8.3,
-      updated_at: new Date(Date.now() - 3600000).toISOString(),
+      updated_at: "2026-06-10T10:00:00.000Z",
     },
     {
       session_id: "c44b8910",
@@ -154,7 +158,7 @@ export function createInitialLedger(): LedgerEntry[] {
       budget_range: null,
       status: LeadStatus.NURTURING_REQUIRED,
       composite_score: 5.7,
-      updated_at: new Date(Date.now() - 7200000).toISOString(),
+      updated_at: "2026-06-10T09:00:00.000Z",
     },
     {
       session_id: "8d22ef11",
@@ -163,7 +167,7 @@ export function createInitialLedger(): LedgerEntry[] {
       budget_range: "$2,000",
       status: LeadStatus.UNQUALIFIED,
       composite_score: 2.3,
-      updated_at: new Date(Date.now() - 10800000).toISOString(),
+      updated_at: "2026-06-10T08:00:00.000Z",
     },
   ];
 }

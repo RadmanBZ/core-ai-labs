@@ -1,7 +1,7 @@
 import { readFile } from "fs/promises";
 import path from "path";
 
-import { createInitialLedger, createInitialTelemetry } from "./mock-stream";
+import { createInitialLedger, createInitialTelemetry, IDLE_SESSION_ID } from "./mock-stream";
 import {
   AgentPhase,
   LeadStatus,
@@ -15,7 +15,7 @@ const SHARED_STATE_PATH = path.join(process.cwd(), "..", "shared_state.json");
 function defaultPayload(): TelemetryBridgePayload {
   return {
     session: {
-      session_id: "idle",
+      session_id: IDLE_SESSION_ID,
       conversation_history: [],
       extracted_data: {
         customer_name: null,
