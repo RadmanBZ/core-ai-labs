@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { LeadScoringGauge } from "@/components/analytics/LeadScoringGauge";
 import { LatencyTokenChart } from "@/components/analytics/LatencyTokenChart";
 import { PipelineFunnelChart } from "@/components/analytics/PipelineFunnelChart";
 import { LeadLedgerTable } from "@/components/crm/LeadLedgerTable";
+import { SessionDetailDrawer } from "@/components/crm/SessionDetailDrawer";
+import { resolveSessionDetail } from "@/lib/session-resolver";
 import { Sidebar } from "@/components/shell/Sidebar";
 import { AgentStateMonitor } from "@/components/telemetry/AgentStateMonitor";
 import { LiveChatStream } from "@/components/telemetry/LiveChatStream";
@@ -18,6 +20,7 @@ export function DashboardClient() {
     activeView,
     setActiveView,
     session,
+    sessions,
     telemetry,
     ledger,
     agentPhase,
@@ -30,6 +33,14 @@ export function DashboardClient() {
 
   const score = compositeScore(session.evaluation);
   const [clock, setClock] = useState("");
+  const [selectedLedgerSessionId, setSelectedLedgerSessionId] = useState<string | null>(
+    null
+  );
+
+  const selectedLedgerSession = useMemo(
+    () => resolveSessionDetail(selectedLedgerSessionId, sessions, ledger),
+    [selectedLedgerSessionId, sessions, ledger]
+  );
 
   useEffect(() => {
     const tick = () =>
@@ -146,9 +157,21 @@ export function DashboardClient() {
             </div>
           )}
 
-          {activeView === "ledger" && <LeadLedgerTable entries={ledger} />}
+          {activeView === "ledger" && (
+            <LeadLedgerTable
+              entries={ledger}
+              selectedSessionId={selectedLedgerSessionId}
+              onSelectSession={setSelectedLedgerSessionId}
+            />
+          )}
         </div>
       </main>
+
+      <SessionDetailDrawer
+        session={selectedLedgerSession}
+        isOpen={Boolean(selectedLedgerSessionId && selectedLedgerSession)}
+        onClose={() => setSelectedLedgerSessionId(null)}
+      />
     </div>
   );
 }

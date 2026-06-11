@@ -3,15 +3,21 @@
 import { GlassPanel } from "@/components/ui/GlassPanel";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { LedgerEntry } from "@/lib/types";
-import { formatTimestamp, hashSessionId } from "@/lib/utils";
+import { cn, formatTimestamp, hashSessionId } from "@/lib/utils";
 import { Search } from "lucide-react";
 import { useMemo, useState } from "react";
 
 interface LeadLedgerTableProps {
   entries: LedgerEntry[];
+  selectedSessionId: string | null;
+  onSelectSession: (sessionId: string) => void;
 }
 
-export function LeadLedgerTable({ entries }: LeadLedgerTableProps) {
+export function LeadLedgerTable({
+  entries,
+  selectedSessionId,
+  onSelectSession,
+}: LeadLedgerTableProps) {
   const [query, setQuery] = useState("");
 
   const filtered = useMemo(() => {
@@ -32,7 +38,7 @@ export function LeadLedgerTable({ entries }: LeadLedgerTableProps) {
         <div>
           <h2 className="text-sm font-semibold text-white">Lead Management Ledger</h2>
           <p className="text-[10px] text-slate-500">
-            High-density CRM view — session states & qualification priority
+            High-density CRM view — click any row to open session intelligence
           </p>
         </div>
         <div className="relative">
@@ -68,36 +74,45 @@ export function LeadLedgerTable({ entries }: LeadLedgerTableProps) {
                 </td>
               </tr>
             ) : (
-              filtered.map((entry) => (
-                <tr
-                  key={entry.session_id}
-                  className="border-b border-white/[0.04] transition-colors hover:bg-white/[0.02]"
-                >
-                  <td className="px-4 py-3 font-mono text-cyan-300/90">
-                    {hashSessionId(entry.session_id)}
-                  </td>
-                  <td className="px-4 py-3 text-slate-200">
-                    {entry.customer_name ?? <span className="text-slate-600">—</span>}
-                  </td>
-                  <td className="px-4 py-3 text-slate-300">
-                    {entry.company_name ?? <span className="text-slate-600">—</span>}
-                  </td>
-                  <td className="px-4 py-3 font-mono text-emerald-300/90">
-                    {entry.budget_range ?? <span className="text-slate-600">—</span>}
-                  </td>
-                  <td className="px-4 py-3 font-mono tabular-nums text-slate-300">
-                    {entry.composite_score !== null
-                      ? entry.composite_score.toFixed(1)
-                      : "—"}
-                  </td>
-                  <td className="px-4 py-3">
-                    <StatusBadge status={entry.status} />
-                  </td>
-                  <td className="px-4 py-3 text-slate-500">
-                    {formatTimestamp(entry.updated_at)}
-                  </td>
-                </tr>
-              ))
+              filtered.map((entry) => {
+                const isSelected = selectedSessionId === entry.session_id;
+                return (
+                  <tr
+                    key={entry.session_id}
+                    onClick={() => onSelectSession(entry.session_id)}
+                    className={cn(
+                      "cursor-pointer border-b border-white/[0.04] transition-all duration-200",
+                      isSelected
+                        ? "bg-cyan-400/[0.08] shadow-[inset_2px_0_0_0_rgba(34,211,238,0.8)]"
+                        : "hover:bg-white/[0.03] hover:shadow-[inset_2px_0_0_0_rgba(34,211,238,0.35)]"
+                    )}
+                  >
+                    <td className="px-4 py-3 font-mono text-cyan-300/90">
+                      {hashSessionId(entry.session_id)}
+                    </td>
+                    <td className="px-4 py-3 text-slate-200">
+                      {entry.customer_name ?? <span className="text-slate-600">—</span>}
+                    </td>
+                    <td className="px-4 py-3 text-slate-300">
+                      {entry.company_name ?? <span className="text-slate-600">—</span>}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-emerald-300/90">
+                      {entry.budget_range ?? <span className="text-slate-600">—</span>}
+                    </td>
+                    <td className="px-4 py-3 font-mono tabular-nums text-slate-300">
+                      {entry.composite_score !== null
+                        ? entry.composite_score.toFixed(1)
+                        : "—"}
+                    </td>
+                    <td className="px-4 py-3">
+                      <StatusBadge status={entry.status} pulse={isSelected} />
+                    </td>
+                    <td className="px-4 py-3 text-slate-500">
+                      {formatTimestamp(entry.updated_at)}
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
