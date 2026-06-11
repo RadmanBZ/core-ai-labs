@@ -34,7 +34,14 @@ async def run_live_pipeline():
     print(f"  RAYZA MULTI-AGENT SALES B2B CORE - {mode_label} DEMO")
     print("=" * 60)
     print("Type 'exit' or 'quit' to terminate the session.")
-    print("Dashboard sync: telemetry pushes to shared_state.json + http://localhost:3000/api/telemetry\n")
+    ports = ", ".join(
+        str(int(url.split(":")[2].split("/")[0]))
+        for url in PipelineConfig.telemetry_api_urls()
+    )
+    print(
+        f"Dashboard sync: shared_state.json + /api/telemetry "
+        f"(ports {ports}, primary {PipelineConfig.DASHBOARD_PORT})\n"
+    )
 
     while True:
         try:

@@ -14,7 +14,11 @@ from modules.sales_agent_pipeline.utils import telemetry_bridge
 async def test_telemetry_bridge_writes_shared_state(tmp_path, monkeypatch):
     shared_file = tmp_path / "shared_state.json"
     monkeypatch.setattr(telemetry_bridge, "SHARED_STATE_PATH", shared_file)
-    monkeypatch.setattr(telemetry_bridge, "_post_payload", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(
+        telemetry_bridge,
+        "_push_with_port_fallback",
+        lambda *_args, **_kwargs: (False, None, "mock offline"),
+    )
 
     state = PipelineState(
         session_id="test-abc",

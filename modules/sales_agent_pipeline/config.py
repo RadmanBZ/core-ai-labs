@@ -27,6 +27,17 @@ class PipelineConfig:
     _RAW_GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "").strip().strip('"').strip("'")
     GEMINI_API_KEY: str = _normalize_gemini_api_key(_RAW_GEMINI_API_KEY)
     DEFAULT_MODEL: str = "gemini-1.5-flash"
+    DASHBOARD_PORT: int = int(os.getenv("DASHBOARD_PORT", "4000"))
+    TELEMETRY_FALLBACK_PORTS: tuple[int, ...] = (4000, 3000)
+
+    @classmethod
+    def telemetry_api_urls(cls) -> list[str]:
+        """Ordered dashboard telemetry endpoints with automatic port fallback."""
+        ports: list[int] = []
+        for port in (cls.DASHBOARD_PORT, *cls.TELEMETRY_FALLBACK_PORTS):
+            if port not in ports:
+                ports.append(port)
+        return [f"http://localhost:{port}/api/telemetry" for port in ports]
 
     @classmethod
     def is_sandbox_key(cls) -> bool:

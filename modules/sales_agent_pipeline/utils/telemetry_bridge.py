@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 from urllib import error, request
 
+from modules.sales_agent_pipeline.config import PipelineConfig
 from modules.sales_agent_pipeline.models import LeadStatus, PipelineState
 from modules.sales_agent_pipeline.utils.logger import get_pipeline_logger
 
@@ -13,7 +14,6 @@ logger = get_pipeline_logger()
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 SHARED_STATE_PATH = _REPO_ROOT / "shared_state.json"
-TELEMETRY_API_URL = "http://localhost:3000/api/telemetry"
 
 _accumulator: dict[str, Any] = {
     "funnel_distribution": {
@@ -107,7 +107,13 @@ def _write_shared_state(payload: dict[str, Any]) -> None:
     )
 
 
-def _post_payload(url: str, payload: dict[str, Any]) -> bool:
+def _extract_port(url: str) -> int:
+    # http://localhost:4000/api/telemetry -> 4000
+    return int(url.split(":")[2].split("/")[0])
+
+
+def _post_payload(url: str, payload: dict[str, Any]) -> tuple[bool, int | None, str | None]:
+    """POST telemetry payload; returns (success, http_status, error_message)."""
     data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     req = request.Request(
         url,
@@ -117,42 +123,81 @@ def _post_payload(url: str, payload: dict[str, Any]) -> bool:
     )
     try:
         with request.urlopen(req, timeout=3) as response:
-            return response.status == 200
-    except (error.URLError, TimeoutError, OSError):
-        return False
+            status = response.status
+            if status == 200:
+                return True, status, None
+            return False, status, f"HTTP {status}"
+    except error.HTTPError as exc:
+        return False, exc.code, f"HTTP {exc.code}: {exc.reason}"
+    except error.URLError as exc:
+        reason = getattr(exc, "reason", exc)
+        return False, None, f"URLError: {reason}"
+    except TimeoutError:
+        return False, None, "TimeoutError: connection timed out after 3s"
+    except OSError as exc:
+        return False, None, f"OSError: {exc}"
+
+
+def _push_with_port_fallback(payload: dict[str, Any]) -> tuple[bool, int | None, str | None]:
+    """Try configured port first, then fall back across supported dashboard ports."""
+    errors: list[str] = []
+
+    for url in PipelineConfig.telemetry_api_urls():
+        port = _extract_port(url)
+        success, status, err = _post_payload(url, payload)
+        if success:
+            return True, port, None
+
+        detail = err or (f"HTTP {status}" if status else "unknown error")
+        errors.append(f"localhost:{port} -> {detail}")
+        logger.debug(f"Telemetry handshake failed on port {port}: {detail}")
+
+    return False, None, " | ".join(errors)
 
 
 async def push_telemetry(state: PipelineState, latency_ms: int = 420) -> None:
     """Publish pipeline state to shared JSON and the Next.js telemetry API."""
     payload = _build_payload(state, latency_ms=latency_ms)
 
-    def _persist() -> tuple[bool, bool]:
+    def _persist() -> tuple[bool, bool, int | None, str | None]:
         file_ok = False
         api_ok = False
+        synced_port: int | None = None
+        api_error: str | None = None
+
         try:
             _write_shared_state(payload)
             file_ok = True
         except OSError as exc:
             logger.warning(f"Shared state write failed: {exc}")
-        api_ok = _post_payload(TELEMETRY_API_URL, payload)
-        return file_ok, api_ok
 
-    file_ok, api_ok = await asyncio.to_thread(_persist)
+        api_ok, synced_port, api_error = _push_with_port_fallback(payload)
+        return file_ok, api_ok, synced_port, api_error
 
-    if file_ok and api_ok:
+    file_ok, api_ok, synced_port, api_error = await asyncio.to_thread(_persist)
+
+    if api_ok and synced_port:
+        success_msg = (
+            f"[SUCCESS] Telemetry Bridge Active -> Dashboard Synced on Port {synced_port}"
+        )
+        print(success_msg)
+        logger.info(success_msg)
         logger.info(
             f"Telemetry bridge synced | Session {state.session_id} | "
-            f"Status {state.status.value} | API + shared_state.json"
+            f"Status {state.status.value} | API:{synced_port} + shared_state.json"
+            if file_ok
+            else f"Telemetry bridge synced | Session {state.session_id} | API:{synced_port}"
         )
     elif file_ok:
         logger.info(
             f"Telemetry bridge synced | Session {state.session_id} | "
             f"Status {state.status.value} | shared_state.json (dashboard offline)"
         )
-    elif api_ok:
-        logger.info(
-            f"Telemetry bridge synced | Session {state.session_id} | "
-            f"Status {state.status.value} | API only"
-        )
+        if api_error:
+            print(f"[ERROR] Telemetry Bridge Failed -> {api_error}")
+            logger.warning(f"Telemetry bridge API unreachable: {api_error}")
     else:
-        logger.warning("Telemetry bridge sync failed — no file or API target available")
+        print(f"[ERROR] Telemetry Bridge Failed -> {api_error or 'no targets available'}")
+        logger.warning(
+            f"Telemetry bridge sync failed — {api_error or 'no file or API target available'}"
+        )
