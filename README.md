@@ -22,6 +22,14 @@ Every pipeline, agent, and engine incubated in this repository adheres to high-e
 * **📺 Deterministic Telemetry & Observability:** Production-ready colorized logging systems mapping absolute operational states and background data extractions.
 
 ---
+Front-End
+cd dashboard
+npm run dev
+
+---
+Back-End
+cd modules/sales_agent_pipeline
+python demo_cli.py
 
 ## 🏗️ Monorepo Architectural Layout
 
