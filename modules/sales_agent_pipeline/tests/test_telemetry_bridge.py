@@ -14,6 +14,9 @@ from modules.sales_agent_pipeline.utils import telemetry_bridge
 async def test_telemetry_bridge_writes_shared_state(tmp_path, monkeypatch):
     shared_file = tmp_path / "shared_state.json"
     monkeypatch.setattr(telemetry_bridge, "SHARED_STATE_PATH", shared_file)
+    monkeypatch.setattr(telemetry_bridge, "_sessions_store", {})
+    monkeypatch.setattr(telemetry_bridge, "_session_status_map", {})
+    monkeypatch.setattr(telemetry_bridge, "_hydrated", True)
     monkeypatch.setattr(
         telemetry_bridge,
         "_push_with_port_fallback",
@@ -50,3 +53,5 @@ async def test_telemetry_bridge_writes_shared_state(tmp_path, monkeypatch):
     assert payload["session"]["status"] == "QUALIFIED"
     assert payload["telemetry"]["funnelDistribution"]["QUALIFIED"] >= 1
     assert payload["ledger"][0]["session_id"] == "test-abc"
+    assert payload["activeSessionId"] == "test-abc"
+    assert len(payload["sessions"]) == 1

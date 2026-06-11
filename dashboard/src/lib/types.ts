@@ -82,6 +82,8 @@ export interface StreamEvent {
 
 export interface TelemetryBridgePayload {
   session: PipelineState;
+  activeSessionId: string;
+  sessions: PipelineState[];
   agentPhase: AgentPhase;
   isStreaming: boolean;
   telemetry: SystemTelemetry;

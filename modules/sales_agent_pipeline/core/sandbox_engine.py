@@ -30,13 +30,25 @@ _FA_TIMELINE_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _EN_NAME_PATTERN = re.compile(
-    r"(?:i(?:'m| am)\s+)([A-Za-z]+(?:\s+[A-Za-z]+)?)|"
-    r"(?:my name is\s+)([A-Za-z]+(?:\s+[A-Za-z]+)?)|"
-    r"(?:this is\s+)([A-Za-z]+(?:\s+[A-Za-z]+)?)",
+    r"(?:i(?:'m| am)\s+)([A-Za-z]+(?:[\s\-][A-Za-z]+)*)|"
+    r"(?:my name is\s+)([A-Za-z]+(?:[\s\-][A-Za-z]+)*)|"
+    r"(?:this is\s+)([A-Za-z]+(?:[\s\-][A-Za-z]+)*)",
     re.IGNORECASE,
 )
 _FA_NAME_PATTERN = re.compile(
     r"من\s+(.+?)\s+هستم|نام\s+من\s+(.+?)(?:\s+است|[\.،,]|$)",
+)
+_FA_SHORT_INTRO_PATTERN = re.compile(
+    r"(?:^|[\s،,.])([\u0600-\u06FF]{2,24})\s+هستم",
+)
+_FA_GREETING_NAME_PATTERN = re.compile(
+    r"(?:درود|سلام)[،,\s]+([\u0600-\u06FF]{2,30})",
+)
+_INTRODUCTION_MARKER_PATTERN = re.compile(
+    r"(?:من\s+.+?\s+هستم|.+?\s+هستم|نام\s+من\b|"
+    r"my name is\b|i(?:'m| am)\b|this is\b|"
+    r"درود[،,\s]|سلام[،,\s])",
+    re.IGNORECASE,
 )
 _EN_COMPANY_PATTERN = re.compile(
     r"(?:we(?:'re| are)\s+)([A-Za-z0-9\s&]+?)(?:\s*[—\-–,]|\.|\s+(?:and|looking|need|want|our)\b)|"
@@ -64,6 +76,20 @@ _PAIN_CATALOG: Tuple[Tuple[str, str, str], ...] = (
 _FA_AUTHORITY_SIGNALS = (
     "مدیر", "رئیس", "صاحب", "بنیانگذار", "مالک", "مدیرعامل", "هیئت مدیره",
 )
+_NON_NAME_TOKENS = frozenset(
+    {
+        "دوباره",
+        "وقت",
+        "خوب",
+        "برخی",
+        "دوستان",
+        "همکاران",
+        "خدمت",
+        "شما",
+        "دوست",
+        "عزیز",
+    }
+)
 _EN_AUTHORITY_SIGNALS = (
     "head of", "director", "cto", "ceo", "vp", "sign off", "decision maker", "i approve",
 )
@@ -88,19 +114,56 @@ def _latest_user_message(history: List[Dict[str, str]], user_message: str) -> st
     )
 
 
+def has_introduction_marker(text: str) -> bool:
+    """Detect whether a message contains an explicit self-introduction signal."""
+    return bool(_INTRODUCTION_MARKER_PATTERN.search(text))
+
+
+def extract_customer_identity(text: str) -> Optional[str]:
+    """Public helper for detecting a lead name from a single inbound message."""
+    return _extract_name(text)
+
+
+def _clean_person_name(name: str) -> Optional[str]:
+    cleaned = re.sub(r"\s+و\s+.*$", "", name.strip())
+    cleaned = cleaned.strip("،,. ").strip()
+    if not cleaned or len(cleaned) < 2:
+        return None
+    if cleaned in _NON_NAME_TOKENS:
+        return None
+    return cleaned[:60]
+
+
 def _extract_name(text: str) -> Optional[str]:
     fa_match = _FA_NAME_PATTERN.search(text)
     if fa_match:
-        name = (fa_match.group(1) or fa_match.group(2) or "").strip()
-        name = re.sub(r"\s+و\s+.*$", "", name).strip("،,. ")
-        return name[:60] if name else None
+        return _clean_person_name(fa_match.group(1) or fa_match.group(2) or "")
+
+    short_fa_match = _FA_SHORT_INTRO_PATTERN.search(text)
+    if short_fa_match:
+        return _clean_person_name(short_fa_match.group(1))
+
+    greeting_match = _FA_GREETING_NAME_PATTERN.search(text)
+    if greeting_match:
+        candidate = greeting_match.group(1).strip()
+        candidate = re.split(r"\s+و\s+|\s+از\s+", candidate)[0]
+        return _clean_person_name(candidate)
 
     en_match = _EN_NAME_PATTERN.search(text)
     if en_match:
-        return (en_match.group(1) or en_match.group(2) or en_match.group(3)).strip()
+        return _clean_person_name(
+            en_match.group(1) or en_match.group(2) or en_match.group(3) or ""
+        )
 
-    en_fallback = re.search(r"(?:i(?:'m| am)\s+)([A-Za-z]+)", text, re.IGNORECASE)
-    return en_fallback.group(1).strip() if en_fallback else None
+    en_fallback = re.search(
+        r"(?:i(?:'m| am)\s+)([A-Za-z]+(?:[\s\-][A-Za-z]+)*)",
+        text,
+        re.IGNORECASE,
+    )
+    if en_fallback:
+        return _clean_person_name(en_fallback.group(1))
+
+    return None
 
 
 def _extract_budget(text: str) -> Optional[str]:

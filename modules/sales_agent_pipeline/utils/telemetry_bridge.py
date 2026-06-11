@@ -15,17 +15,19 @@ logger = get_pipeline_logger()
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 SHARED_STATE_PATH = _REPO_ROOT / "shared_state.json"
 
+_sessions_store: dict[str, dict[str, Any]] = {}
+_session_status_map: dict[str, str] = {}
+_hydrated = False
+
 _accumulator: dict[str, Any] = {
     "funnel_distribution": {
         LeadStatus.QUALIFIED.value: 0,
         LeadStatus.NURTURING_REQUIRED.value: 0,
         LeadStatus.UNQUALIFIED.value: 0,
-        LeadStatus.PENDING.value: 1,
+        LeadStatus.PENDING.value: 0,
     },
     "latency_history": [],
     "ledger": [],
-    "active_sessions": 0,
-    "last_status": None,
 }
 
 
@@ -36,30 +38,50 @@ def _composite_score(state: PipelineState) -> float | None:
     return (scores.budget_fit + scores.intent_strength + scores.authority_level) / 3.0
 
 
-def _build_payload(state: PipelineState, latency_ms: int = 420) -> dict[str, Any]:
-    global _accumulator
+def _hydrate_from_disk() -> None:
+    global _hydrated
+    if _hydrated or not SHARED_STATE_PATH.exists():
+        _hydrated = True
+        return
 
-    if _accumulator["last_status"] != state.status.value:
-        previous = _accumulator["last_status"]
-        if previous and previous in _accumulator["funnel_distribution"]:
-            _accumulator["funnel_distribution"][previous] = max(
-                0, _accumulator["funnel_distribution"][previous] - 1
-            )
-        _accumulator["funnel_distribution"][state.status.value] = (
-            _accumulator["funnel_distribution"].get(state.status.value, 0) + 1
-        )
-        _accumulator["last_status"] = state.status.value
+    try:
+        payload = json.loads(SHARED_STATE_PATH.read_text(encoding="utf-8"))
+        for session in payload.get("sessions", []):
+            _sessions_store[session["session_id"]] = session
+        for entry in payload.get("ledger", []):
+            if entry["session_id"] not in {e["session_id"] for e in _accumulator["ledger"]}:
+                _accumulator["ledger"].append(entry)
+        telemetry = payload.get("telemetry", {})
+        if telemetry.get("funnelDistribution"):
+            _accumulator["funnel_distribution"] = telemetry["funnelDistribution"]
+        if telemetry.get("latencyHistory"):
+            _accumulator["latency_history"] = telemetry["latencyHistory"]
+        for session in _sessions_store.values():
+            _session_status_map[session["session_id"]] = session.get("status", LeadStatus.PENDING.value)
+    except (OSError, json.JSONDecodeError, KeyError, TypeError) as exc:
+        logger.debug(f"Telemetry hydrate skipped: {exc}")
+    finally:
+        _hydrated = True
 
-    metric = {
-        "timestamp": int(time.time() * 1000),
-        "latencyMs": latency_ms,
-        "tokens": 180 + len(state.conversation_history) * 40,
-    }
-    _accumulator["latency_history"] = (
-        _accumulator["latency_history"][-23:] + [metric]
-    )
-    _accumulator["active_sessions"] = max(1, _accumulator["active_sessions"])
 
+def _update_funnel_for_session(session_id: str, status: str) -> None:
+    previous = _session_status_map.get(session_id)
+    if previous == status:
+        return
+
+    funnel = _accumulator["funnel_distribution"]
+    if previous and previous in funnel:
+        funnel[previous] = max(0, funnel[previous] - 1)
+    funnel[status] = funnel.get(status, 0) + 1
+    _session_status_map[session_id] = status
+
+
+def _upsert_session(state: PipelineState) -> None:
+    _sessions_store[state.session_id] = state.model_dump(mode="json")
+    _update_funnel_for_session(state.session_id, state.status.value)
+
+
+def _upsert_ledger_entry(state: PipelineState) -> None:
     ledger_entry = {
         "session_id": state.session_id,
         "customer_name": state.extracted_data.customer_name,
@@ -70,17 +92,36 @@ def _build_payload(state: PipelineState, latency_ms: int = 420) -> dict[str, Any
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    existing_ids = {entry["session_id"] for entry in _accumulator["ledger"]}
-    if state.session_id in existing_ids:
-        _accumulator["ledger"] = [
-            ledger_entry if entry["session_id"] == state.session_id else entry
-            for entry in _accumulator["ledger"]
-        ]
-    else:
-        _accumulator["ledger"] = [ledger_entry, *_accumulator["ledger"]]
+    ledger = _accumulator["ledger"]
+    for index, entry in enumerate(ledger):
+        if entry["session_id"] == state.session_id:
+            ledger[index] = ledger_entry
+            return
+    _accumulator["ledger"] = [ledger_entry, *ledger]
+
+
+def _build_payload(state: PipelineState, latency_ms: int = 420) -> dict[str, Any]:
+    _hydrate_from_disk()
+    _upsert_session(state)
+    _upsert_ledger_entry(state)
+
+    metric = {
+        "timestamp": int(time.time() * 1000),
+        "latencyMs": latency_ms,
+        "tokens": 180 + len(state.conversation_history) * 40,
+    }
+    _accumulator["latency_history"] = _accumulator["latency_history"][-23:] + [metric]
+
+    sessions = sorted(
+        _sessions_store.values(),
+        key=lambda item: item.get("session_id", ""),
+        reverse=True,
+    )
 
     return {
-        "session": state.model_dump(mode="json"),
+        "session": _sessions_store[state.session_id],
+        "activeSessionId": state.session_id,
+        "sessions": sessions,
         "agentPhase": "complete",
         "isStreaming": False,
         "telemetry": {
@@ -91,7 +132,7 @@ def _build_payload(state: PipelineState, latency_ms: int = 420) -> dict[str, Any
                 "orchestrator": "online",
             },
             "pipelineLatencyMs": latency_ms,
-            "activeSessions": _accumulator["active_sessions"],
+            "activeSessions": len(_sessions_store),
             "latencyHistory": _accumulator["latency_history"],
             "funnelDistribution": _accumulator["funnel_distribution"],
         },
@@ -108,12 +149,10 @@ def _write_shared_state(payload: dict[str, Any]) -> None:
 
 
 def _extract_port(url: str) -> int:
-    # http://localhost:4000/api/telemetry -> 4000
     return int(url.split(":")[2].split("/")[0])
 
 
 def _post_payload(url: str, payload: dict[str, Any]) -> tuple[bool, int | None, str | None]:
-    """POST telemetry payload; returns (success, http_status, error_message)."""
     data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     req = request.Request(
         url,
@@ -139,7 +178,6 @@ def _post_payload(url: str, payload: dict[str, Any]) -> tuple[bool, int | None, 
 
 
 def _push_with_port_fallback(payload: dict[str, Any]) -> tuple[bool, int | None, str | None]:
-    """Try configured port first, then fall back across supported dashboard ports."""
     errors: list[str] = []
 
     for url in PipelineConfig.telemetry_api_urls():
@@ -184,14 +222,13 @@ async def push_telemetry(state: PipelineState, latency_ms: int = 420) -> None:
         logger.info(success_msg)
         logger.info(
             f"Telemetry bridge synced | Session {state.session_id} | "
-            f"Status {state.status.value} | API:{synced_port} + shared_state.json"
-            if file_ok
-            else f"Telemetry bridge synced | Session {state.session_id} | API:{synced_port}"
+            f"Status {state.status.value} | Sessions={len(_sessions_store)} | "
+            f"Ledger={len(_accumulator['ledger'])}"
         )
     elif file_ok:
         logger.info(
             f"Telemetry bridge synced | Session {state.session_id} | "
-            f"Status {state.status.value} | shared_state.json (dashboard offline)"
+            f"shared_state.json (dashboard offline)"
         )
         if api_error:
             print(f"[ERROR] Telemetry Bridge Failed -> {api_error}")

@@ -29,6 +29,9 @@ export function usePipelineStream() {
   const [session, setSession] = useState<PipelineState>(() =>
     createEmptySession(IDLE_SESSION_ID)
   );
+  const [sessions, setSessions] = useState<PipelineState[]>(() => [
+    createEmptySession(IDLE_SESSION_ID),
+  ]);
   const [telemetry, setTelemetry] = useState<SystemTelemetry>(createInitialTelemetry);
   const [ledger, setLedger] = useState<LedgerEntry[]>(createInitialLedger);
   const [agentPhase, setAgentPhase] = useState<AgentPhase>("idle");
@@ -51,7 +54,11 @@ export function usePipelineStream() {
       return;
     }
     lastSyncRef.current = payload.updated_at;
-    setSession(payload.session);
+    const activeSession =
+      payload.sessions?.find((item) => item.session_id === payload.activeSessionId) ??
+      payload.session;
+    setSession(activeSession);
+    setSessions(payload.sessions?.length ? payload.sessions : [activeSession]);
     setTelemetry(payload.telemetry);
     setLedger(payload.ledger);
     setAgentPhase(payload.agentPhase);
@@ -209,6 +216,7 @@ export function usePipelineStream() {
     activeView,
     setActiveView,
     session,
+    sessions,
     telemetry,
     ledger,
     agentPhase,
