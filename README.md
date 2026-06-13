@@ -26,10 +26,11 @@ Front-End
 cd dashboard
 npm run dev
 
----
 Back-End
 cd modules/sales_agent_pipeline
 python demo_cli.py
+---
+
 
 ## 🏗️ Monorepo Architectural Layout
 
